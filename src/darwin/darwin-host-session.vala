@@ -25,10 +25,10 @@ namespace Frida {
 			get { return "Local System"; }
 		}
 
-		public ImageData? icon {
+		public Image? icon {
 			get { return _icon; }
 		}
-		private ImageData? _icon;
+		private Image? _icon;
 
 		public HostSessionProviderKind kind {
 			get { return HostSessionProviderKind.LOCAL_SYSTEM; }
@@ -37,7 +37,7 @@ namespace Frida {
 		private DarwinHostSession host_session;
 
 		construct {
-			_icon = _extract_icon ();
+			_icon = Image.from_data (_try_extract_icon ());
 		}
 
 		public async void close () {
@@ -76,7 +76,7 @@ namespace Frida {
 			agent_session_closed (id, reason);
 		}
 
-		public static extern ImageData? _extract_icon ();
+		public static extern ImageData? _try_extract_icon ();
 	}
 
 	public class DarwinHostSession : BaseDBusHostSession {
@@ -151,11 +151,18 @@ namespace Frida {
 			var pid = helper.pid;
 
 			string remote_address;
-			var stream = yield helper.make_pipe_stream (pid, out remote_address);
+			var stream_request = yield helper.open_pipe_stream (pid, out remote_address);
 
 			var fruitjector = injector as Fruitjector;
 			var id = yield fruitjector.inject_library_resource (pid, agent, "frida_agent_main", remote_address);
 			injectee_by_pid[pid] = id;
+
+			IOStream stream;
+			try {
+				stream = yield stream_request.future.wait_async ();
+			} catch (Gee.FutureError e) {
+				throw new Error.TRANSPORT (e.message);
+			}
 
 			DBusConnection conn;
 			AgentSessionProvider provider;
@@ -228,7 +235,7 @@ namespace Frida {
 			yield helper.input (pid, data);
 		}
 
-		public override async void resume (uint pid) throws Error {
+		protected override async void perform_resume (uint pid) throws Error {
 #if IOS
 			if (fruit_launcher != null) {
 				if (yield fruit_launcher.try_resume (pid))
@@ -243,7 +250,7 @@ namespace Frida {
 			yield helper.kill_process (pid);
 		}
 
-		protected override async IOStream perform_attach_to (uint pid, out Object? transport) throws Error {
+		protected override async Gee.Promise<IOStream> perform_attach_to (uint pid, out Object? transport) throws Error {
 			transport = null;
 
 			var uninjected_handler = injector.uninjected.connect ((id) => perform_attach_to.callback ());
@@ -252,13 +259,23 @@ namespace Frida {
 			injector.disconnect (uninjected_handler);
 
 			string remote_address;
-			var stream = yield helper.make_pipe_stream (pid, out remote_address);
+			var stream_request = yield helper.open_pipe_stream (pid, out remote_address);
 
 			var fruitjector = injector as Fruitjector;
 			var id = yield fruitjector.inject_library_resource (pid, agent, "frida_agent_main", remote_address);
 			injectee_by_pid[pid] = id;
 
-			return stream;
+			return stream_request;
+		}
+
+		protected override uint get_injectee_id_from_pid (uint pid) throws Error {
+			if (!injectee_by_pid.has_key (pid))
+				throw new Error.INVALID_ARGUMENT ("No injectee found for PID %u", pid);
+			return injectee_by_pid[pid];
+		}
+
+		protected override void associate_pid_with_injectee_id (uint pid, uint injectee_id) {
+			injectee_by_pid[pid] = injectee_id;
 		}
 
 #if IOS

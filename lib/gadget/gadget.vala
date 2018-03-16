@@ -1227,7 +1227,7 @@ namespace Frida.Gadget {
 					return false;
 
 				clients[connection] = new Client (this, connection);
-				connection.closed.connect (on_connection_closed);
+				connection.on_closed.connect (on_connection_closed);
 
 				return true;
 			});
@@ -1351,6 +1351,18 @@ namespace Frida.Gadget {
 
 			public async HostSpawnInfo[] enumerate_pending_spawns () throws Error {
 				throw new Error.NOT_SUPPORTED ("Not possible when embedded");
+			}
+
+			public async void enable_child_gating () throws Error {
+				throw new Error.NOT_SUPPORTED ("Not yet implemented");
+			}
+
+			public async void disable_child_gating () throws Error {
+				throw new Error.NOT_SUPPORTED ("Not yet implemented");
+			}
+
+			public async HostChildInfo[] enumerate_pending_children () throws Error {
+				throw new Error.NOT_SUPPORTED ("Not yet implemented");
 			}
 
 			public async uint spawn (string path, string[] argv, string[] envp) throws Error {

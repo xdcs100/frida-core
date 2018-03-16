@@ -25,7 +25,7 @@ namespace Frida {
 			get { return "Local System"; }
 		}
 
-		public ImageData? icon {
+		public Image? icon {
 			get { return null; }
 		}
 
@@ -226,23 +226,23 @@ namespace Frida {
 			yield helper.kill (pid);
 		}
 
-		protected override async IOStream perform_attach_to (uint pid, out Object? transport) throws Error {
+		protected override async Gee.Promise<IOStream> perform_attach_to (uint pid, out Object? transport) throws Error {
 			PipeTransport.set_temp_directory (helper.tempdir.path);
 
 			PipeTransport t;
-			Pipe pipe;
 			try {
 				t = new PipeTransport ();
-				pipe = new Pipe (t.local_address);
-			} catch (IOError stream_error) {
-				throw new Error.NOT_SUPPORTED (stream_error.message);
+			} catch (IOError e) {
+				throw new Error.NOT_SUPPORTED (e.message);
 			}
+
+			var stream_request = Pipe.open (t.local_address);
 
 #if ANDROID
 			if (robo_launcher != null) {
 				if (yield robo_launcher.try_establish (pid, t.remote_address)) {
 					transport = t;
-					return pipe;
+					return stream_request;
 				}
 			}
 #endif
@@ -258,7 +258,7 @@ namespace Frida {
 
 			transport = t;
 
-			return pipe;
+			return stream_request;
 		}
 
 #if ANDROID
